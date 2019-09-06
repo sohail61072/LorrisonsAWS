@@ -1,0 +1,59 @@
+service: Morrisons-monitoring-rds
+app: server-app
+
+
+
+provider:
+  name: aws
+  runtime: nodejs10.x
+  memorySize: 128
+  timeout: 30
+  region: eu-west-2
+
+plugins:
+  - serverless-offline
+  - postgresql-easy
+
+functions:
+
+  getTodo:
+    handler: handler.getTodo
+    events:
+     - http:
+         path: todo/{id}
+         method: get
+         cors: true
+          
+  getAllTodos:
+    handler: handler.getAllTodos
+    events:
+     - http:
+         path: todo
+         method: get
+         cors: true
+
+  createTodo:
+    handler: handler.createTodo
+    events:
+      - http:
+          path: todo
+          method: post
+          cors: true
+              
+  updateTodo:
+    handler: handler.updateTodo
+    events:
+      - http:
+          path: todo/{id}
+          method: put
+          cors: true
+          
+
+
+
+  
+
+
+         
+  
+      
