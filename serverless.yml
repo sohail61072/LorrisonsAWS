@@ -16,44 +16,50 @@ plugins:
 
 functions:
 
-  getTodo:
-    handler: handler.getTodo
-    events:
-     - http:
-         path: todo/{id}
-         method: get
-         cors: true
-          
-  getAllTodos:
-    handler: handler.getAllTodos
-    events:
-     - http:
-         path: todo
-         method: get
-         cors: true
-
-  createTodo:
-    handler: handler.createTodo
+  getSummary:
+    handler: handler.getSummary
     events:
       - http:
-          path: todo
+          path: query/{query_name}
+          method: get
+          cors: true
+
+  createUpdateQuery:
+    handler: handler.createUpdateQuery
+    events:
+      - http:
+          path: query
           method: post
           cors: true
-              
-  updateTodo:
-    handler: handler.updateTodo
-    events:
-      - http:
-          path: todo/{id}
-          method: put
-          cors: true
+
+  # getTodo:
+  #   handler: handler.getTodo
+  #   events:
+  #    - http:
+  #        path: todo/{id}
+  #        method: get
+  #        cors: true
           
+  # getAllTodos:
+  #   handler: handler.getAllTodos
+  #   events:
+  #    - http:
+  #        path: todo
+  #        method: get
+  #        cors: true
 
-
-
-  
-
-
-         
-  
-      
+  # createTodo:
+  #   handler: handler.createTodo
+  #   events:
+  #     - http:
+  #         path: todo
+  #         method: post
+  #         cors: true
+              
+  # updateTodo:
+  #   handler: handler.updateTodo
+  #   events:
+  #     - http:
+  #         path: todo/{id}
+  #         method: put
+  #         cors: true
