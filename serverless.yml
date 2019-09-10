@@ -1,4 +1,4 @@
-service: Morrisons-monitoring-rds
+service: AWS-Monitoring-Mock
 app: server-app
 
 

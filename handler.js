@@ -1,4 +1,5 @@
 const db = require('./db_connect');
+const aws = require("aws-sdk");
 
 module.exports.getSummary = (event, context, callback) => {
     context.callbackWaitsForEmptyEventLoop = false;
@@ -52,13 +53,36 @@ module.exports.createUpdateQuery = (event, context, callback) => {
 module.exports.generateSummary = (event, context, callback) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const queries = db.query(
-        `select query_string from query_table where query_type = 'summary_generator';`
+        `select query_name, query_string, sns_threshold from query_table where query_type = 'summary_generator';`
     )
         .then(res => {
-            
+            for(var i = 0; i < res.length; i++) {
+                var obj = res[i];
+                var originalString = obj.query_string;
+                var newString = originalString.replace(/\"/g, "\'");
+                const count = db.query(`${newString}`).catch(e => {
+                    console.log(e);
+                    callback(null, {
+                        statusCode: e.statusCode || 500,
+                        body: `Error executing query: ${newString} :` + e
+                    })
+                })
+                if (obj.sns_threshold != null) {
+                    if (count > 1) {
+                        var sns = new aws.SNS();
+                        var params = {
+                            Message: `The ${obj.query_name} query has found ${count} files in error. Check the dashboard.`, 
+                            Subject: "NS From AWSMonitoringTask SummaryGenerator Lambda",
+                            TopicArn: "arn:aws:sns:eu-west-2:503104246251:AWSMonitoringMock"
+                        };
+                        sns.publish(params);
+                    }
+                } 
+            }
+            var message = 'Successfully executed summary_generator queries'            
             callback(null, {
                 statusCode: 200,
-                body: JSON.stringify(res)
+                body: JSON.stringify(message)
             })
         }).catch(e => {
             console.log(e);
@@ -67,9 +91,4 @@ module.exports.generateSummary = (event, context, callback) => {
                 body: 'Error in getSummary: ' + e
             })
         })
-    // const lenQueries = queries.length
-    // for (i = 0; i < lenQueries; i++) {
-    //     db.query(query_string)
-    // };
-    // const message = 'Success';
 }
