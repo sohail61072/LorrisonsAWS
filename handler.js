@@ -4,12 +4,47 @@ const aws = require("aws-sdk");
 module.exports.getSummary = (event, context, callback) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const query_name = event.pathParameters.query_name;
-    const result = db.query(`select * from query_table where query_name = '${query_name}'`)
+    const result = db.query(`select * from query_table where query_name = '${query_name}';`)
         .then(res => {
-            callback(null, {
-                statusCode: 200,
-                body: JSON.stringify(res)
-            })
+            var obj = res[0];
+            if (obj.query_type != 'summary_generator') {
+                var originalString = obj.query_string;
+                var newString = originalString.replace(/\"/g, "\'");
+                if (obj.query_type != 'drilldown') {
+                    db.query(`${newString}`).then(response => {
+                        callback(null, {
+                            statusCode: 200,
+                            body: JSON.stringify(response[0].summary_count)
+                        })
+                    }).catch(e => {
+                        console.log(e);
+                        callback(null, {
+                            statusCode: e.statusCode || 500,
+                            body: `Error executing query: ${newString} :` + e
+                        })
+                    })
+                } else {
+                    db.query(`${newString}`).then(response => {
+                        callback(null, {
+                            statusCode: 200,
+                            body: JSON.stringify(response[0])
+                        })
+                    }).catch(e => {
+                        console.log(e);
+                        callback(null, {
+                            statusCode: e.statusCode || 500,
+                            body: `Error executing query: ${newString} :` + e
+                        })
+                    })
+                }
+
+            } else {
+                callback(null, {
+                    statusCode: 200,
+                    body: JSON.stringify(obj)
+                })
+            }
+            
         })
         .catch(e => {
             console.log(e);
@@ -60,7 +95,8 @@ module.exports.generateSummary = (event, context, callback) => {
                 var obj = res[i];
                 var originalString = obj.query_string;
                 var newString = originalString.replace(/\"/g, "\'");
-                const count = db.query(`${newString}`).catch(e => {
+                var finalString = newString.replace(/generate_/g, "");
+                const count = db.query(`${finalString}`).catch(e => {
                     console.log(e);
                     callback(null, {
                         statusCode: e.statusCode || 500,
