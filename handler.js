@@ -1,5 +1,5 @@
 const db = require('./db_connect');
-const aws = require("aws-sdk");
+var AWS = require("aws-sdk");
 
 module.exports.getSummary = (event, context, callback) => {
     context.callbackWaitsForEmptyEventLoop = false;
@@ -103,16 +103,32 @@ module.exports.generateSummary = (event, context, callback) => {
                         body: `Error executing query: ${newString} :` + e
                     })
                 })
+                console.info(`for ${obj.query_name} obj sns_threshold =  ${obj.sns_threshold}, count = ${count}`)
                 if (obj.sns_threshold != null) {
+                    console.info(`sns_threshold not null for ${obj.query_name}`)
                     if (count > obj.sns_threshold) {
-                        var sns = new aws.SNS();
-                        var params = {
-                            Message: `The ${obj.query_name} query has found ${count} files in error. Check the dashboard.`, 
-                            Subject: "NS From AWSMonitoringTask SummaryGenerator Lambda",
-                            TopicArn: "arn:aws:sns:eu-west-2:503104246251:AWSMonitoringMock"
-                        };
-                        sns.publish(params);
+                        console.info(`count is bigger than threshold for ${obj.query_name}`)
+                            var eventText = 'Here is some Text';
+                            var sns = new AWS.SNS();
+                            var params = {
+                                Message: eventText, 
+                                Subject: "Test SNS From Lambda",
+                                TopicArn: "arn:aws:sns:eu-west-2:503104246251:AWSMonitoringMock"
+                            };
+                            sns.publish(params, function(err,data) {
+                                if(err) {
+                                    console.error('error publishing to SNS');
+                                    context.fail(err);
+                                } else {
+                                    console.info('message published to SNS');
+                                    context.succeed(null, data);
+                                }
+                            });
+                    } else {
+                        console.info(`count not bigger than threshold for ${obj.query_name}`)
                     }
+                } else {
+                    console.info(`sns_threshold null for ${obj.query_name}`)
                 } 
             }
             var message = 'Successfully executed summary_generator queries'            
@@ -127,4 +143,5 @@ module.exports.generateSummary = (event, context, callback) => {
                 body: 'Error in getSummary: ' + e
             })
         })
+    return context.logStreamName;
 }
