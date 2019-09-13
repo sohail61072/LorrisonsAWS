@@ -86,7 +86,7 @@ module.exports.createUpdateQuery = (event, context, callback) => {
 }
 
 module.exports.generateSummary = (event, context, callback) => {
-    context.callbackWaitsForEmptyEventLoop = false;
+    context.callbackWaitsForEmptyEventLoop = true;
     const queries = db.query(
         `select query_name, query_string, sns_threshold from query_table where query_type = 'summary_generator';`
     )
@@ -104,7 +104,7 @@ module.exports.generateSummary = (event, context, callback) => {
                     })
                 })
                 if (obj.sns_threshold != null) {
-                    if (count > 1) {
+                    if (count > obj.sns_threshold) {
                         var sns = new aws.SNS();
                         var params = {
                             Message: `The ${obj.query_name} query has found ${count} files in error. Check the dashboard.`, 
