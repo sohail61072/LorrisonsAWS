@@ -24,6 +24,22 @@ functions:
           method: get
           cors: true
 
+  getScenarios:
+    handler: handler.getScenarios
+    events:
+      - http:
+          path: scenarios
+          method: get
+          cors: true
+
+  getStats:
+    handler: handler.getStats
+    events:
+      - http:
+          path: stats/{scenario_name}
+          method: get
+          cors: true
+
   createUpdateQuery:
     handler: handler.createUpdateQuery
     events:

@@ -14,7 +14,7 @@ module.exports.getSummary = (event, context, callback) => {
                     db.query(`${newString}`).then(response => {
                         callback(null, {
                             statusCode: 200,
-                            body: JSON.stringify(response[0].summary_count)
+                            body: JSON.stringify(response[0])
                         })
                     }).catch(e => {
                         console.log(e);
@@ -45,6 +45,65 @@ module.exports.getSummary = (event, context, callback) => {
                 })
             }
             
+        })
+        .catch(e => {
+            console.log(e);
+            callback(null, {
+                statusCode: e.statusCode || 500,
+                body: 'Error in getSummary: ' + e
+            })
+        })
+}
+
+module.exports.getScenarios = (event, context, callback) => {
+    context.callbackWaitsForEmptyEventLoop = true;
+    const result = db.query(`SELECT query_name from query_table where scenario = `)
+        .then(res => {
+            callback(null, {
+                statusCode: 200,
+                body: JSON.stringify(res)
+            })
+        })
+        .catch(e => {
+            console.log(e);
+            callback(null, {
+                statusCode: e.statusCode || 500,
+                body: 'Error in getSummary: ' + e
+            })
+        })
+}
+
+module.exports.getStats = (event, context, callback) => {
+    context.callbackWaitsForEmptyEventLoop = true;
+    var jsonObj = {};
+    const scenario_name = event.pathParameters.scenario_name;
+    const result = db.query(`SELECT query_name, query_string FROM query_table where scenario = '${scenario_name}'`)
+        .then(res => {
+            // for (i=0; i<res.length; i++) {
+                var recievedResponse = [];
+                var obj = res[0];
+                var status = obj.query_name.replace(`${scenario_name}_`, "");
+                var originalString = obj.query_string;
+                var newString = originalString.replace(/\"/g, "\'");
+                const loopResult = db.query(`${newString}`).then(response => {
+                    // callback(null, {
+                    //     statusCode: 200,
+                    //     body: JSON.stringify(response[0].summary_count)
+                    // })
+                    recievedResponse = response[0].summary_count;
+                }).catch(e => {
+                    console.log(e);
+                    callback(null, {
+                        statusCode: e.statusCode || 500,
+                        body: `Error executing query: ${newString} :` + e
+                    })
+                })
+                jsonObj[`${status}`] = `${recievedResponse}`;
+            // }
+            callback(null, {
+                statusCode: 200,
+                body: JSON.stringify(recievedResponse)
+            })
         })
         .catch(e => {
             console.log(e);
