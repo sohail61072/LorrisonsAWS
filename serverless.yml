@@ -1,8 +1,6 @@
 service: AWS-Monitoring-Mock
 app: server-app
 
-
-
 provider:
   name: aws
   runtime: nodejs10.x
