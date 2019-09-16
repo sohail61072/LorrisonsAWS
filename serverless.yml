@@ -9,6 +9,11 @@ provider:
   memorySize: 128
   timeout: 30
   region: eu-west-2
+  iamRoleStatements:
+    - Effect: "Allow"
+      Resource: "*"
+      Action:
+        - "sns:*"
 
 plugins:
   - serverless-offline
