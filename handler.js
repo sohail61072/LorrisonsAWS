@@ -76,41 +76,44 @@ module.exports.getScenarios = (event, context, callback) => {
 
 module.exports.getStats = (event, context, callback) => {
     context.callbackWaitsForEmptyEventLoop = true;
-    var jsonObj = {};
+    var queries = {};
     const scenario_name = event.pathParameters.scenario_name;
-    const result = db.query(`SELECT query_name, query_string FROM query_table where scenario = '${scenario_name}'`)
+    const resultFromQueryTable = db.query(`SELECT query_name, query_string FROM query_table where scenario = '${scenario_name}'`)
         .then(res => {
-            // for (i=0; i<res.length; i++) {
-                var recievedResponse = [];
-                var obj = res[0];
+            for (i=0; i<res.length; i++) {
+                var obj = res[i];
                 var status = obj.query_name.replace(`${scenario_name}_`, "");
-                var originalString = obj.query_string;
+                var originalString = obj.query_string.replace(/;/g, "");
                 var newString = originalString.replace(/\"/g, "\'");
-                const loopResult = db.query(`${newString}`).then(response => {
-                    // callback(null, {
-                    //     statusCode: 200,
-                    //     body: JSON.stringify(response[0].summary_count)
-                    // })
-                    recievedResponse = response[0].summary_count;
-                }).catch(e => {
-                    console.log(e);
-                    callback(null, {
-                        statusCode: e.statusCode || 500,
-                        body: `Error executing query: ${newString} :` + e
-                    })
+                var finalString = newString.replace(/summary_count/, `\'${status}\' as status, summary_count`);
+                queries[`${status}`] = `${finalString}`;
+            }
+            const final_query = `(${queries.total}) UNION ALL (${queries.completed}) UNION ALL (${queries.pending}) UNION ALL (${queries.error})`
+            const finalResult = db.query(final_query)
+            .then(response => {
+                newObj = {};
+                for(var i = 0; i < response.length; i++) {
+                    var obj = response[i];
+                    newObj[`${obj.status}`] = `${obj.summary_count}`;
+                }
+                callback(null, {
+                    statusCode: 200,
+                    body: JSON.stringify(newObj)
                 })
-                jsonObj[`${status}`] = `${recievedResponse}`;
-            // }
-            callback(null, {
-                statusCode: 200,
-                body: JSON.stringify(recievedResponse)
+            })
+            .catch(e => {
+                console.log(e);
+                callback(null, {
+                    statusCode: e.statusCode || 500,
+                    body: 'Error in getStats finalResult: ' + e
+                })
             })
         })
         .catch(e => {
             console.log(e);
             callback(null, {
                 statusCode: e.statusCode || 500,
-                body: 'Error in getSummary: ' + e
+                body: 'Error in getStats resultFromQueryTable: ' + e
             })
         })
 }
@@ -176,23 +179,6 @@ module.exports.generateSummary = (event, context, callback) => {
                         } catch (err) {
                             return generateError(500, new Error('Couldn\'t add the calculation due to an internal error.'))
                         }
-                        // console.info(`count is bigger than threshold for ${obj.query_name}`)
-                        //     var eventText = 'Here is some Text';
-                        //     var sns = new AWS.SNS();
-                        //     var params = {
-                        //         Message: eventText, 
-                        //         Subject: "Test SNS From Lambda",
-                        //         TopicArn: "arn:aws:sns:eu-west-2:503104246251:AWSMonitoringMock"
-                        //     };
-                        //     sns.publish(params, function(err,data) {
-                        //         if(err) {
-                        //             console.error('error publishing to SNS');
-                        //             context.fail(err);
-                        //         } else {
-                        //             console.info('message published to SNS');
-                        //             context.succeed(null, data);
-                        //         }
-                        //     });
                     } else {
                         console.info(`count not bigger than threshold for ${obj.query_name}`)
                     }
@@ -224,16 +210,16 @@ async function publishSnsTopic (message, subject) {
     return sns.publish(params).promise()
   }
 
-  function generateResponse (code, payload) {
+function generateResponse (code, payload) {
     console.log(payload)
     return {
       statusCode: code,
       body: JSON.stringify(payload)
     }
-  }
-  function generateError (code, err) {
+}
+function generateError (code, err) {
     console.error(err)
     return generateResponse(code, {
       message: err.message
     })
-  }
+}
