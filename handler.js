@@ -161,30 +161,7 @@ module.exports.generateSummary = (event, context, callback) => {
                 var newString = originalString.replace(/\"/g, "\'");
                 var finalString = newString.replace(/generate_/g, "");
                 console.log("before query:", finalString, obj.query_name, obj.sns_threshold);
-                const count = db.query(`${finalString}`).then(response => {
-                    console.log("after query:", finalString, obj.query_name, obj.sns_threshold)
-                    if (obj.sns_threshold != null) {
-                        if (response[0].summary_count > obj.sns_threshold) {
-                            try {
-                                var snsMessage = `${obj.query_name} returned ${response[0].summary_count} files currently in error.`;
-                                var snsSubject = `Errors in ${obj.query_name} have exceeded the pre-set threshold`;
-                                const metadata = publishSnsTopic(snsMessage, snsSubject)
-                                return generateResponse(200, {
-                                    message: 'Successfully added the calculation.',
-                                    data: metadata
-                                })
-                            } catch (err) {
-                                return generateError(500, new Error('Couldn\'t add the calculation due to an internal error.'))
-                            }
-                        }
-                    }
-                }).catch(e => {
-                    console.log(e);
-                    callback(null, {
-                        statusCode: e.statusCode || 500,
-                        body: `Error executing query: ${newString} :` + e
-                    })
-                }) 
+                summaryQuery(finalString, obj, callback)
                 //obj = null;
                 console.log("after obj null query:", finalString, obj.query_name, obj.sns_threshold)
             }
@@ -200,6 +177,33 @@ module.exports.generateSummary = (event, context, callback) => {
                 body: 'Error in getSummary: ' + e
             })
         })
+}
+
+function summaryQuery (queryString, queryObject, callback) {
+    db.query(`${queryString}`).then(response => {
+        console.log("after query:", queryString, queryObject.query_name, queryObject.sns_threshold)
+        if (queryObject.sns_threshold != null) {
+            if (response[0].summary_count > queryObject.sns_threshold) {
+                try {
+                    var snsMessage = `${queryObject.query_name} returned ${response[0].summary_count} files currently in error.`;
+                    var snsSubject = `Errors in ${queryObject.query_name} have exceeded the pre-set threshold`;
+                    const metadata = publishSnsTopic(snsMessage, snsSubject)
+                    return generateResponse(200, {
+                        message: 'Successfully added the calculation.',
+                        data: metadata
+                    })
+                } catch (err) {
+                    return generateError(500, new Error('Couldn\'t add the calculation due to an internal error.'))
+                }
+            }
+        }
+    }).catch(e => {
+        console.log(e);
+        callback(null, {
+            statusCode: e.statusCode || 500,
+            body: `Error executing query: ${queryString} :` + e
+        })
+    })
 }
 
 async function publishSnsTopic (message, subject) {
