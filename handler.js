@@ -149,42 +149,44 @@ module.exports.createUpdateQuery = (event, context, callback) => {
 }
 
 module.exports.generateSummary = (event, context, callback) => {
-    context.callbackWaitsForEmptyEventLoop = true;
+    context.callbackWaitsForEmptyEventLoop = false;
     const queries = db.query(
         `select query_name, query_string, sns_threshold from query_table where query_type = 'summary_generator';`
     )
         .then(res => {
-            for(var i = 0; i < res.length; i++) {
-                var obj = res[i];
+            returnedQueries = res;
+            for(var i = 0; i < returnedQueries.length; i++) {
+                var obj = returnedQueries[i];
                 var originalString = obj.query_string;
                 var newString = originalString.replace(/\"/g, "\'");
                 var finalString = newString.replace(/generate_/g, "");
-                const count = db.query(`${finalString}`).catch(e => {
+                console.log("before query:", finalString, obj.query_name, obj.sns_threshold);
+                const count = db.query(`${finalString}`).then(response => {
+                    console.log("after query:", finalString, obj.query_name, obj.sns_threshold)
+                    if (obj.sns_threshold != null) {
+                        if (response[0].summary_count > obj.sns_threshold) {
+                            try {
+                                var snsMessage = `${obj.query_name} returned ${response[0].summary_count} files currently in error.`;
+                                var snsSubject = `Errors in ${obj.query_name} have exceeded the pre-set threshold`;
+                                const metadata = publishSnsTopic(snsMessage, snsSubject)
+                                return generateResponse(200, {
+                                    message: 'Successfully added the calculation.',
+                                    data: metadata
+                                })
+                            } catch (err) {
+                                return generateError(500, new Error('Couldn\'t add the calculation due to an internal error.'))
+                            }
+                        }
+                    }
+                }).catch(e => {
                     console.log(e);
                     callback(null, {
                         statusCode: e.statusCode || 500,
                         body: `Error executing query: ${newString} :` + e
                     })
-                })
-                console.info(`for ${obj.query_name} obj sns_threshold =  ${obj.sns_threshold}, count = ${count}`)
-                if (obj.sns_threshold != null) {
-                    console.info(`sns_threshold not null for ${obj.query_name}`)
-                    if (4 > obj.sns_threshold) {
-                        try {
-                            const metadata = publishSnsTopic(`INSERT SNS MESSAGE HERE`, `SNS Subject`)
-                            return generateResponse(200, {
-                                message: 'Successfully added the calculation.',
-                                data: metadata
-                            })
-                        } catch (err) {
-                            return generateError(500, new Error('Couldn\'t add the calculation due to an internal error.'))
-                        }
-                    } else {
-                        console.info(`count not bigger than threshold for ${obj.query_name}`)
-                    }
-                } else {
-                    console.info(`sns_threshold null for ${obj.query_name}`)
-                } 
+                }) 
+                //obj = null;
+                console.log("after obj null query:", finalString, obj.query_name, obj.sns_threshold)
             }
             var message = 'Successfully executed summary_generator queries'            
             callback(null, {
@@ -198,7 +200,6 @@ module.exports.generateSummary = (event, context, callback) => {
                 body: 'Error in getSummary: ' + e
             })
         })
-    return context.logStreamName;
 }
 
 async function publishSnsTopic (message, subject) {
