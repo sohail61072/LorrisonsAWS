@@ -19,11 +19,19 @@ plugins:
 
 functions:
 
-  getSummary:
-    handler: handler.getSummary
+  getQuery:
+    handler: handler.getQuery
     events:
       - http:
           path: query/{query_name}
+          method: get
+          cors: true
+
+  getSingleCountOrDrilldown:
+    handler: handler.getSingleCountOrDrilldown
+    events:
+      - http:
+          path: count-drilldown/{query_name}
           method: get
           cors: true
 
@@ -32,14 +40,6 @@ functions:
     events:
       - http:
           path: scenarios
-          method: get
-          cors: true
-
-  getStats:
-    handler: handler.getStats
-    events:
-      - http:
-          path: stats/{scenario_name}
           method: get
           cors: true
 
@@ -58,35 +58,11 @@ functions:
           path: summary
           method: get
           cors: true
-
-  # getTodo:
-  #   handler: handler.getTodo
-  #   events:
-  #    - http:
-  #        path: todo/{id}
-  #        method: get
-  #        cors: true
-          
-  # getAllTodos:
-  #   handler: handler.getAllTodos
-  #   events:
-  #    - http:
-  #        path: todo
-  #        method: get
-  #        cors: true
-
-  # createTodo:
-  #   handler: handler.createTodo
-  #   events:
-  #     - http:
-  #         path: todo
-  #         method: post
-  #         cors: true
-              
-  # updateTodo:
-  #   handler: handler.updateTodo
-  #   events:
-  #     - http:
-  #         path: todo/{id}
-  #         method: put
-  #         cors: true
+  
+  getLatestData:
+    handler: handler.getLatestData
+    events:
+      - http:
+          path: getlatest
+          method: get
+          cors: true
