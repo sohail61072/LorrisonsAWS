@@ -113,57 +113,76 @@ module.exports.getScenarios = (event, context, callback) => {
 module.exports.getLatestData = (event, context, callback) => {
     context.callbackWaitsForEmptyEventLoop = true;
     console.log(`Function getLatestData: STARTS`)
-    const get_query = `SELECT * FROM (SELECT summary_id, summary_count, created_dt,`+
-        ` summary_table.query_name, query_table.scenario, RANK() OVER (PARTITION BY summary_table.query_name `+
-        `ORDER BY created_dt DESC) AS Rank FROM summary_table `+
-        `inner join query_table on query_table.query_name = summary_table.query_name) a WHERE Rank = 1`
-    const result = db.query(get_query)
-        .then(res => {
-            console.log(`Latest summaries recieved`)
-            var result = res.reduce( (acc, obj) => {
-                acc[obj.scenario] = acc[obj.scenario] || [];
-                acc[obj.scenario].push(obj);
-                return acc;
-            }, {});
-
-            var scenarioName = Object.keys(result);
-            console.log(`Found Scenarios: ${JSON.stringify(scenarioName)}`)
-            var newobj ={};
-            var valueArray = [];
-            
-            for (i=0; i<scenarioName.length; i++) {
-                var currKey = scenarioName[i]
-                console.log(`Reformatting data for scenario: ${JSON.stringify(currKey)}`)
-                var currentObj = result[currKey]
-                var valueObj = {};
+    const get_query = `SELECT * FROM (
+        SELECT
+         summary_id, summary_count, created_dt,
+     summary_table.query_name, query_table.scenario,
+        RANK() OVER (PARTITION BY summary_table.query_name
+                     ORDER BY created_dt DESC) AS Rank
+        FROM summary_table inner join query_table on query_table.query_name = summary_table.query_name) a
+      order by rank asc
+     `
+      const result = db.query(get_query)
+      .then(res => {
+        console.log(`Latest summaries recieved`)
+        var result = res.reduce( (acc, obj) => {
+          acc[obj.scenario] = acc[obj.scenario] || [];
+          acc[obj.scenario].push(obj);
+          return acc;
+        }, {});
+    
+        var scenarioName = Object.keys(result);
+        console.log(`Found Scenarios: ${JSON.stringify(scenarioName)}`)
+    
+    
+        var newobj ={};
         
-                for (j=0; j< currentObj.length; j++) {
-                    var obj = currentObj[j];
-                    console.log(`Extracting data from obj: ${JSON.stringify(obj.query_name)}`)
-                    var status = obj.query_name.replace(currKey+'_', "");
-                    var summaryCount = obj.summary_count;
-                    valueObj[status]= summaryCount;
-                    valueObj.created_dt = obj.created_dt               
-                    delete obj.summary_count;
-                    obj[status] = summaryCount;
+        for (i=0; i<scenarioName.length; i++) {
+          var currKey = scenarioName[i]
+          console.log(`Reformatting data for scenario: ${JSON.stringify(currKey)}`)
+          var currentObj = result[currKey]
+          var index = 1
+          var valueArray = [];
+          
+          var valueObj = {};
+    
+          for (j=0; j< currentObj.length; j++) {
+            
+            // var objString =JSON.stringify(obj.summary_count)
+            var obj = currentObj[j];
+            if(obj.rank != index){
+                      index=obj.rank
+                      valueArray.push(valueObj)
+                      valueObj = {}
+                    }
+            
+            valueObj.rank = obj.rank              
+            var status = obj.query_name.replace(currKey+'_', "");
+            var summaryCount = obj.summary_count;
+            valueObj[status]= summaryCount;
+            valueObj.created_dt = obj.created_dt
+            obj[status] = summaryCount;
+            
                 }
-                valueArray.push(valueObj)
-                newobj[currKey] = valueArray[i]
-            }
-            console.log(`Latest Data to Return: ${JSON.stringify(newobj)}`)
-            callback(null, {
-                statusCode: 200,
-                body: JSON.stringify(newobj)
-            })
+                newobj[currKey] = valueArray
+              }
+    
+        var message = 'executed  get query'
+        console.log("Returning latest data")
+        callback(null, {
+          statusCode: 200,
+          body: JSON.stringify(newobj)
         })
-        .catch(e => {
-            console.log(`Error recieving latest summaries`, e);
-            callback(null, {
-                statusCode: e.statusCode || 500,
-                body: 'Error in getSummary: ' + e
-            })
+      })
+      .catch(e => {
+        console.log(e);
+        callback(null, {
+          statusCode: e.statusCode || 500,
+          body: 'Error in getSummary: ' + e
         })
-  }
+      })
+      
+    }
 
 module.exports.createUpdateQuery = (event, context, callback) => {
     console.log('Function createUpdateQuery: STARTS')
