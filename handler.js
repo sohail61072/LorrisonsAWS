@@ -287,7 +287,7 @@ module.exports.generateSummary = (event, context, callback) => {
     console.log(`Function generateSummary: STARTS`)
     context.callbackWaitsForEmptyEventLoop = true;
     const queries = db.query(
-        `select query_name, query_string, sns_threshold from query_table where query_type = 'summary_generator';`
+        `select query_name, query_string, sns_threshold from ops_dashboard.query_table where query_type = 'summary_generator';`
     )
         .then(res => {
             console.log(`Successfully returned generator queries`)
@@ -296,8 +296,8 @@ module.exports.generateSummary = (event, context, callback) => {
                 var obj = returnedQueries[i];
                 var originalString = obj.query_string;
                 var newString = originalString.replace(/\"/g, "\'");
-                var finalString = newString.replace(/generate_/g, "");
-                summaryQuery(finalString, obj, callback)
+                //var finalString = newString.replace(/generate_/g, "");
+                summaryQuery(newString, obj, callback)
                 console.log(`Query for ${obj.query_name} added to queue`)
             }
             var message = 'Successfully executed summary_generator queries'            
