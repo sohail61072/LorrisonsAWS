@@ -27,11 +27,11 @@ functions:
           method: get
           cors: true
 
-  getSingleCountOrDrilldown:
-    handler: handler.getSingleCountOrDrilldown
+  getDrilldown:
+    handler: handler.getDrilldown
     events:
       - http:
-          path: count-drilldown/{query_name}
+          path: drilldown/{query_name}
           method: get
           cors: true
 
@@ -40,6 +40,14 @@ functions:
     events:
       - http:
           path: scenarios
+          method: get
+          cors: true
+
+  getLatestData:
+    handler: handler.getLatestData
+    events:
+      - http:
+          path: getlatest
           method: get
           cors: true
 
@@ -58,11 +66,19 @@ functions:
           path: summary
           method: get
           cors: true
-  
-  getLatestData:
-    handler: handler.getLatestData
+
+  generateQueries:
+    handler: handler.generateQueries
     events:
       - http:
-          path: getlatest
+          path: query/generate
           method: get
+          cors: true
+
+  createScenario:
+    handler: handler.createScenario
+    events:
+      - http:
+          path: scenarios
+          method: post
           cors: true

@@ -24,9 +24,9 @@ module.exports.getQuery = (event, context, callback) => {
         })
 }
 
-module.exports.getSingleCountOrDrilldown = (event, context, callback) => {
+module.exports.getDrilldown = (event, context, callback) => {
     context.callbackWaitsForEmptyEventLoop = true;
-    console.log("Function getSingleCountOrDrilldown : STARTS")
+    console.log("Function Drilldown : STARTS")
     const query_name = event.pathParameters.query_name;
     const result = db.query(`select * from query_table where query_name = '${query_name}';`)
         .then(res => {
@@ -370,4 +370,156 @@ function generateError (code, err) {
     return generateResponse(code, {
       message: err.message
     })
+}
+
+module.exports.generateQueries = (event, context, callback) => {
+    console.log(`Function generateQueries: STARTS`)
+    context.callbackWaitsForEmptyEventLoop = true;
+
+    const queries = db.query(
+        `SELECT * FROM ops_dashboard.master_scenario_table;`
+    )
+        .then(res => {
+            console.log(`Successfully returned generator queries`)
+            returnedScenarios = res;
+            var scen
+            for(var i = 0; i < returnedScenarios.length; i++) {
+                var obj = returnedScenarios[i];
+                setUpQueries(obj, callback)
+            }        
+            callback(null, {
+                statusCode: 200,
+                body: JSON.stringify(returnedScenarios)
+            })
+        }).catch(e => {
+            console.log(e);
+            callback(null, {
+                statusCode: e.statusCode || 500,
+                body: 'Error in generateSummary: ' + e
+            })
+        })
+}
+
+function setUpQueries (scenario_obj, callback) {
+
+    const scenario_name = scenario_obj.scenario_name
+    const source_table = scenario_obj.source_table
+    const channel = scenario_obj.channel
+    const status_column_name = scenario_obj.status_column_name
+    const sns_threshold = scenario_obj.sns_threshold
+
+    var base_summary_query = `insert into ops_dashboard.summary_table(query_name, summary_count, total_value, created_dt) `+
+    `values (\"${scenario_name}_<<<\",`+
+    `( select count(*) from ${source_table} where channel = \"${channel}\" `+
+    `and ${status_column_name} = \"<<<\" and date(transaction_dt) = date(now())), `+
+    `COALESCE((select SUM((sales_payload -> \"transactions\"->0->\"tenders\"->0->\"tenderamount\"->0->>\"amount\")::float) `+
+    `AS total_cost from ${source_table} where ${status_column_name} = \"<<<\" and channel = \"${channel}\" and date(transaction_dt) = date(now())`+
+    `group by (${status_column_name})),0::float), now()) returning summary_count;`
+
+    var total_summary_queryString = `insert into ops_dashboard.summary_table(query_name, summary_count, total_value, created_dt) `+
+    `values (\"${scenario_name}_total\",`+
+    `( select count(*) from ${source_table} where channel = \"${channel}\" `+
+    `and date(transaction_dt) = date(now())), `+
+    `COALESCE((select SUM((sales_payload -> \"transactions\"->0->\"tenders\"->0->\"tenderamount\"->0->>\"amount\")::float) `+
+    `AS total_cost from ${source_table} where channel = \"${channel}\" and date(transaction_dt) = date(now())),0::float)`+
+    `, now()) returning summary_count;`
+
+    var completed_summary_queryString = base_summary_query.replace(/<<</g, "completed")
+    var pending_summary_queryString = base_summary_query.replace(/<<</g, "pending")
+    var error_summary_queryString = base_summary_query.replace(/<<</g, "error")
+    var drilldown_queryString = `select * from ${source_table} where `+
+    `channel = \"${channel}\" and ${status_column_name} = \"error\" and date(transaction_dt) = date(now());`
+
+    //total
+    queryGenerator(scenario_name, null, total_summary_queryString, `${scenario_name}_total`, `summary_generator`, callback)
+
+    //completed
+    queryGenerator(scenario_name, null, completed_summary_queryString, `${scenario_name}_completed`, `summary_generator`, callback)
+
+    //pending
+    queryGenerator(scenario_name, null, pending_summary_queryString, `${scenario_name}_pending`, `summary_generator`, callback)
+
+    //error
+    queryGenerator(scenario_name, sns_threshold, error_summary_queryString, `${scenario_name}_error`, `summary_generator`, callback)
+
+    //drilldown
+    queryGenerator(scenario_name, null, drilldown_queryString, `drilldown_${scenario_name}_error`, `drilldown`, callback)
+}
+
+function queryGenerator (scenario_name_param, threshold_param, query_string_param, query_name_param, query_type_param, callback) {
+
+    const query_name = query_name_param;
+    const query_string = query_string_param;
+    const query_type = query_type_param;
+    const sns_threshold = threshold_param;
+    const scenario = scenario_name_param;
+
+    var values = `\'${query_name}\', \'${query_string}\', \'${query_type}\'`;
+    var columns = `query_name, query_string, query_type`
+    if (sns_threshold != null) {
+        values = values.concat(`, \'${sns_threshold}\'`)
+        columns = columns.concat(`, sns_threshold`)
+    }
+    if (scenario != null) {
+        values = values.concat(`, \'${scenario}\'`)
+        columns = columns.concat(`, scenario`)
+    }
+    const final_query = 
+    `INSERT INTO ops_dashboard.query_table(${columns}) `+
+    `VALUES (${values}) ON CONFLICT (query_name) DO NOTHING RETURNING query_name as new`
+
+    //console.log(final_query)
+    
+    const result = db.query(final_query)
+        .then(res => {
+            try {
+                const newQuery = res[0].new
+                console.log(`Adding new query: ${query_name} - ${JSON.stringify(res)}`)
+            } catch(err) {
+                console.log(`The query ${query_name} already exists`)
+            }
+        })
+        .catch(e => {
+            console.log(`Error adding query: ${query_name}`, e);
+        })
+}
+
+module.exports.createScenario = (event, context, callback) => {
+    console.log('Function createScenario: STARTS')
+    context.callbackWaitsForEmptyEventLoop = true;
+    let body = JSON.parse(event.body);
+    console.log(`Creating new scenario:`)
+
+    const scenario_name = body.scenario_name;
+    const sns_threshold = body.sns_threshold;
+    const source_table = body.source_table;
+    const channel = body.channel;
+    const status_column_name = body.status_column_name;
+
+    console.log(`Recieved information from body: scenario_name: ${scenario_name}, `+
+    `sns_threshold: ${sns_threshold}, source_table: ${source_table}, channel: ${channel}, `+
+    `status_column_name: ${status_column_name}`)
+
+    var values = `'${scenario_name}', '${sns_threshold}', '${source_table}', '${channel}', '${status_column_name}'`;
+    var columns = `scenario_name, sns_threshold, source_table, channel, status_column_name`
+
+    const final_query = 
+    `INSERT INTO ops_dashboard.master_scenario_table(${columns}) `+
+    `VALUES (${values})`
+    
+    const result = db.query(final_query)
+        .then(res => {
+            console.log(`Successfully added query`)
+            callback(null, {
+                statusCode: 200,
+                body: JSON.stringify(`${body.scenario_name} added to master_scenario_table`)
+            })
+        })
+        .catch(e => {
+            console.log(`Error adding query: `, e);
+            callback(null, {
+                statusCode: e.statusCode || 500,
+                body: 'Error in getSummary: ' + e
+            })
+        })
 }
